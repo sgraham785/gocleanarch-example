@@ -1,0 +1,41 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:12
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=gcarch_example
+    volumes:
+      - ./postgres/:/docker-entrypoint-initdb.d/
+    ports:
+      - 5432:5432
+    container_name: gcarch-postgres
+    network_mode: "bridge"
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    container_name: gcarch-grafana
+    network_mode: "bridge"
+    depends_on:
+      - prometheus
+      - prometheus-pushgateway
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    container_name: gcarch-prometheus
+    network_mode: "bridge"
+  prometheus-pushgateway:
+    image: prom/pushgateway
+    container_name: gcarch-pushgateway
+    expose:
+      - 9091
+    ports:
+      - "9091:9091"
