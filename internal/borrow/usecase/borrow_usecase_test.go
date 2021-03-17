@@ -7,6 +7,8 @@ import (
 	"github.com/sgraham785/gocleanarch-example/internal/borrow/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/borrow/usecase"
 	userEntity "github.com/sgraham785/gocleanarch-example/internal/user/entity"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 
 	"github.com/golang/mock/gomock"
 	bookMock "github.com/sgraham785/gocleanarch-example/internal/book/mock"
@@ -17,9 +19,14 @@ import (
 func Test_borrowUseCase_Borrow(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
 	uMock := userMock.NewMockUserUseCase(controller)
 	bMock := bookMock.NewMockBookUseCase(controller)
-	uc := usecase.New(uMock, bMock)
+	uc := usecase.New(s, uMock, bMock)
 	t.Run("user not found", func(t *testing.T) {
 		u := &userEntity.User{
 			ID: userEntity.NewID(),
@@ -27,7 +34,7 @@ func Test_borrowUseCase_Borrow(t *testing.T) {
 		b := &bookEntity.Book{
 			ID: bookEntity.NewID(),
 		}
-		uMock.EXPECT().GetUser(u.ID).Return(nil, userEntity.ErrUserNotFound)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(nil, userEntity.ErrUserNotFound)
 		err := uc.Borrow(u, b)
 		assert.Equal(t, userEntity.ErrUserNotFound, err)
 	})
@@ -38,8 +45,8 @@ func Test_borrowUseCase_Borrow(t *testing.T) {
 		b := &bookEntity.Book{
 			ID: bookEntity.NewID(),
 		}
-		uMock.EXPECT().GetUser(u.ID).Return(u, nil)
-		bMock.EXPECT().GetBook(b.ID).Return(nil, bookEntity.ErrBookNotFound)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(u, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(nil, bookEntity.ErrBookNotFound)
 		err := uc.Borrow(u, b)
 		assert.Equal(t, bookEntity.ErrBookNotFound, err)
 	})
@@ -51,8 +58,8 @@ func Test_borrowUseCase_Borrow(t *testing.T) {
 			ID: bookEntity.NewID(),
 		}
 		b.Quantity = 0
-		uMock.EXPECT().GetUser(u.ID).Return(u, nil)
-		bMock.EXPECT().GetBook(b.ID).Return(b, nil)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(u, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(b, nil)
 		err := uc.Borrow(u, b)
 		assert.Equal(t, entity.ErrNotEnoughBooks, err)
 	})
@@ -65,8 +72,8 @@ func Test_borrowUseCase_Borrow(t *testing.T) {
 		}
 		u.AddBook(b.ID)
 		b.Quantity = 1
-		uMock.EXPECT().GetUser(u.ID).Return(u, nil)
-		bMock.EXPECT().GetBook(b.ID).Return(b, nil)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(u, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(b, nil)
 		err := uc.Borrow(u, b)
 		assert.Equal(t, entity.ErrBookAlreadyBorrowed, err)
 	})
@@ -78,8 +85,8 @@ func Test_borrowUseCase_Borrow(t *testing.T) {
 			ID:       bookEntity.NewID(),
 			Quantity: 10,
 		}
-		uMock.EXPECT().GetUser(u.ID).Return(u, nil)
-		bMock.EXPECT().GetBook(b.ID).Return(b, nil)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(u, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(b, nil)
 		uMock.EXPECT().UpdateUser(u).Return(nil)
 		bMock.EXPECT().UpdateBook(b).Return(nil)
 		err := uc.Borrow(u, b)
@@ -92,12 +99,17 @@ func Test_borrowUseCase_Return(t *testing.T) {
 	defer controller.Finish()
 	uMock := userMock.NewMockUserUseCase(controller)
 	bMock := bookMock.NewMockBookUseCase(controller)
-	uc := usecase.New(uMock, bMock)
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	uc := usecase.New(s, uMock, bMock)
 	t.Run("book not found", func(t *testing.T) {
 		b := &bookEntity.Book{
 			ID: bookEntity.NewID(),
 		}
-		bMock.EXPECT().GetBook(b.ID).Return(nil, bookEntity.ErrBookNotFound)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(nil, bookEntity.ErrBookNotFound)
 		err := uc.Return(b)
 		assert.Equal(t, bookEntity.ErrBookNotFound, err)
 	})
@@ -108,7 +120,7 @@ func Test_borrowUseCase_Return(t *testing.T) {
 		b := &bookEntity.Book{
 			ID: bookEntity.NewID(),
 		}
-		bMock.EXPECT().GetBook(b.ID).Return(b, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(b, nil)
 		uMock.EXPECT().ListUsers().Return([]*userEntity.User{u}, nil)
 		err := uc.Return(b)
 		assert.Equal(t, entity.ErrBookNotBorrowed, err)
@@ -121,8 +133,8 @@ func Test_borrowUseCase_Return(t *testing.T) {
 			ID: bookEntity.NewID(),
 		}
 		u.AddBook(b.ID)
-		bMock.EXPECT().GetBook(b.ID).Return(b, nil)
-		uMock.EXPECT().GetUser(u.ID).Return(u, nil)
+		bMock.EXPECT().GetBook(b.ID.String()).Return(b, nil)
+		uMock.EXPECT().GetUser(u.ID.String()).Return(u, nil)
 		uMock.EXPECT().ListUsers().Return([]*userEntity.User{u}, nil)
 		uMock.EXPECT().UpdateUser(u).Return(nil)
 		bMock.EXPECT().UpdateBook(b).Return(nil)

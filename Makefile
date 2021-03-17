@@ -1,11 +1,20 @@
 FORCE: ;
 
+SELF := $(MAKE)
+OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH ?= $(shell uname -m | sed 's/x86_64/amd64/g')
 GO := $(shell which go 2>/dev/null)
 MOCKGEN := $(shell which mockgen)
 
 INSTALL_DIR ?= /usr/local/sbin
 RELEASE_DIR ?= release
 APP ?= $(shell basename `pwd`)
+
+null  :=
+space := $(null) #
+comma := ,
+PACKAGES := $(shell pwd)/cmd/api,$(shell pwd)/cmd/server
+PKGS ?= $(subst $(comma),$(space),$(PACKAGES))
 
 export GCARCH_POSTGRES_HOST=localhost
 export GCARCH_POSTGRES_USER=postgres
@@ -18,19 +27,20 @@ export GCARCH_API_PORT=9000
 go/run/api:
 	$(GO) run cmd/api/main.go
 
-## Build binary
+## Build binary for all platforms
 go/build: $(GO)
 	$(call assert-set,GO)
-	$(GO) build -o $(RELEASE_DIR)/$(APP)
-
-## Build binary for all platforms
-go/build/all: $(GO)
-	$(call assert-set,GO)
 ifeq ($(RELEASE_ARCH),)
-	gox -output "${RELEASE_DIR}/${APP}_{{.OS}}_{{.Arch}}"
+	gox -output "${RELEASE_DIR}/${APP}_{{.Dir}}_{{.OS}}_{{.Arch}}" $(PKGS)
 else
-	gox -osarch="$(RELEASE_ARCH)" -output "${RELEASE_DIR}/${APP}_{{.OS}}_{{.Arch}}"
+	gox -osarch="$(RELEASE_ARCH)" -output "${RELEASE_DIR}/${APP}_{{.Dir}}_{{.OS}}_{{.Arch}}" $(PKGS)
 endif
+
+go/watch:
+	air -c .air.toml
+
+go/exec/api:
+	${RELEASE_DIR}/${APP}_api_${OS}_${ARCH}
 
 ## Install dependencies
 go/dep:
@@ -38,10 +48,14 @@ go/dep:
 	$(GO) mod vendor
 
 ## Install development dependencies
-go/deps-dev: $(GO)
+go/dep/dev: $(GO)
 	$(call assert-set,GO)
-	$(GO) get -u -v golang.org/x/lint/golint
+	$(GO) get -u -v github.com/golang/mock/gomock
+	$(GO) get -u -v github.com/golang/mock/mockgen
+	$(GO) get -u -v github.com/golang/mock/mockgen/model
 	$(GO) get -u -v github.com/mitchellh/gox
+	$(GO) get -u -v github.com/cosmtrek/air
+	@$(SELF) go/dep
 
 ## Clean compiled binary
 go/clean:

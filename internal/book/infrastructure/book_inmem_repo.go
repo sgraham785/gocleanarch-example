@@ -2,12 +2,14 @@ package infrastructure
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/sgraham785/gocleanarch-example/internal/book/entity"
 )
 
 type bookInMemRepo struct {
-	m map[entity.ID]*entity.Book
+	mtx sync.RWMutex
+	m   map[entity.ID]*entity.Book
 }
 
 // NewInMemRepo create book in memory repository
@@ -20,12 +22,16 @@ func NewInMemRepo() BookRepo {
 
 // Create a book
 func (r *bookInMemRepo) Create(e *entity.Book) (entity.ID, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	r.m[e.ID] = e
 	return e.ID, nil
 }
 
 //Get a book
 func (r *bookInMemRepo) Get(id entity.ID) (*entity.Book, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	if r.m[id] == nil {
 		return nil, entity.ErrBookNotFound
 	}
@@ -38,6 +44,8 @@ func (r *bookInMemRepo) Update(e *entity.Book) error {
 	if err != nil {
 		return err
 	}
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	r.m[e.ID] = e
 	return nil
 }
@@ -45,6 +53,8 @@ func (r *bookInMemRepo) Update(e *entity.Book) error {
 //Search books
 func (r *bookInMemRepo) Search(query string) ([]*entity.Book, error) {
 	var d []*entity.Book
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	for _, j := range r.m {
 		if strings.Contains(strings.ToLower(j.Title), query) {
 			d = append(d, j)
@@ -56,6 +66,8 @@ func (r *bookInMemRepo) Search(query string) ([]*entity.Book, error) {
 //List books
 func (r *bookInMemRepo) List() ([]*entity.Book, error) {
 	var d []*entity.Book
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	for _, j := range r.m {
 		d = append(d, j)
 	}
@@ -64,6 +76,8 @@ func (r *bookInMemRepo) List() ([]*entity.Book, error) {
 
 //Delete a book
 func (r *bookInMemRepo) Delete(id entity.ID) error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	if r.m[id] == nil {
 		return entity.ErrBookNotFound
 	}

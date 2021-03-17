@@ -4,18 +4,15 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/sgraham785/gocleanarch-example/config"
+	"github.com/sgraham785/gocleanarch-example/pkg/config"
 )
 
-// Conn cares the repo connections
-// type Conn struct {
-// 	Pg *sqlx.DB
-// }
+type Repository struct {
+	Pg *sqlx.DB
+}
 
 // NewPostgresConn is called to connect to a PostgreSQL database
-func NewPostgresConn(c config.PostgresConf) *sqlx.DB {
-	fmt.Printf("PostgresHost=%s\n", c.PostgresHost)
-	fmt.Printf("PostgresPort=%d\n", c.PostgresPort)
+func NewPostgresConn(c config.PostgresConf) *Repository {
 	format := "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable"
 	dataSource := fmt.Sprintf(format,
 		c.PostgresHost, c.PostgresPort, c.PostgresUser, c.PostgresPassword, c.PostgresDB)
@@ -23,8 +20,5 @@ func NewPostgresConn(c config.PostgresConf) *sqlx.DB {
 	if err != nil {
 		fmt.Println(err)
 	}
-	// return &Conn{
-	// 	Pg: db,
-	// }
-	return db
+	return &Repository{Pg: db}
 }

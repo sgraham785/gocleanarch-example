@@ -9,7 +9,9 @@ import (
 	bookUseCase "github.com/sgraham785/gocleanarch-example/internal/book/usecase"
 
 	_ "github.com/lib/pq"
-	"github.com/sgraham785/gocleanarch-example/config"
+	"github.com/sgraham785/gocleanarch-example/pkg/config"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 
 	bookInfra "github.com/sgraham785/gocleanarch-example/internal/book/infrastructure"
 	"github.com/sgraham785/gocleanarch-example/pkg/metric"
@@ -24,8 +26,12 @@ func handleParams() (string, error) {
 }
 
 func main() {
-	c := config.Load()
-	metricService, err := metric.NewPrometheusService(c)
+	cfg := config.Load()
+
+	logger := logger.New()
+	defer logger.Zap.Sync()
+
+	metricService, err := metric.NewPrometheusService(cfg)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -36,10 +42,17 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	db := repository.NewPostgresConn(c.PostgresConf)
-	defer db.Close()
-	repo := bookInfra.NewPgRepo(db)
-	service := bookUseCase.New(repo)
+	db := repository.NewPostgresConn(cfg.PostgresConf)
+	defer db.Pg.Close()
+
+	server := &server.Server{
+		Cfg: cfg,
+		Log: logger,
+		DB:  db,
+	}
+
+	bookRepo := bookInfra.NewPgRepo(server)
+	service := bookUseCase.New(server, bookRepo)
 	all, err := service.SearchBooks(query)
 	if err != nil {
 		log.Fatal(err)

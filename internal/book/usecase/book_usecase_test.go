@@ -7,6 +7,8 @@ import (
 	"github.com/sgraham785/gocleanarch-example/internal/book/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/book/infrastructure"
 	"github.com/sgraham785/gocleanarch-example/internal/book/usecase"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,8 +23,13 @@ func newFixtureBook() *entity.Book {
 }
 
 func Test_bookUseCase_CreateBook(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	m := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	m := usecase.New(s, r)
 	u := newFixtureBook()
 	_, err := m.CreateBook(u.Title, u.Author, u.Pages, u.Quantity)
 	assert.Nil(t, err)
@@ -30,8 +37,13 @@ func Test_bookUseCase_CreateBook(t *testing.T) {
 }
 
 func Test_bookUseCase_SearchBooks(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	m := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	m := usecase.New(s, r)
 	u1 := newFixtureBook()
 	u2 := newFixtureBook()
 	u2.Title = "Lemmy: Biography"
@@ -56,38 +68,48 @@ func Test_bookUseCase_SearchBooks(t *testing.T) {
 	})
 
 	t.Run("get", func(t *testing.T) {
-		saved, err := m.GetBook(uID)
+		saved, err := m.GetBook(uID.String())
 		assert.Nil(t, err)
 		assert.Equal(t, u1.Title, saved.Title)
 	})
 }
 
 func Test_bookUseCase_UpdateBook(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	m := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	m := usecase.New(s, r)
 	u := newFixtureBook()
 	id, err := m.CreateBook(u.Title, u.Author, u.Pages, u.Quantity)
 	assert.Nil(t, err)
-	saved, _ := m.GetBook(id)
+	saved, _ := m.GetBook(id.String())
 	saved.Title = "Lemmy: Biography"
 	assert.Nil(t, m.UpdateBook(saved))
-	updated, err := m.GetBook(id)
+	updated, err := m.GetBook(id.String())
 	assert.Nil(t, err)
 	assert.Equal(t, "Lemmy: Biography", updated.Title)
 }
 
 func Test_bookUseCase_DeleteBook(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	m := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	m := usecase.New(s, r)
 	u1 := newFixtureBook()
 	u2 := newFixtureBook()
 	u2ID, _ := m.CreateBook(u2.Title, u2.Author, u2.Pages, u2.Quantity)
 
-	err := m.DeleteBook(u1.ID)
+	err := m.DeleteBook(u1.ID.String())
 	assert.Equal(t, entity.ErrBookNotFound, err)
 
-	err = m.DeleteBook(u2ID)
+	err = m.DeleteBook(u2ID.String())
 	assert.Nil(t, err)
-	_, err = m.GetBook(u2ID)
+	_, err = m.GetBook(u2ID.String())
 	assert.Equal(t, entity.ErrBookNotFound, err)
 }

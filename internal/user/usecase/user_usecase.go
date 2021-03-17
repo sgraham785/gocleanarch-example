@@ -1,50 +1,56 @@
 package usecase
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sgraham785/gocleanarch-example/internal/user/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/user/infrastructure"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 )
 
 //go:generate mockgen -destination=../mock/user_usecase_mock.go -package=mock github.com/sgraham785/gocleanarch-example/internal/user/usecase UserUseCase
 
 // UserUseCase is the interface that provides the methods.
 type UserUseCase interface {
-	GetUser(id entity.ID) (*entity.User, error)
+	GetUser(id string) (*entity.User, error)
 	SearchUsers(query string) ([]*entity.User, error)
 	ListUsers() ([]*entity.User, error)
 	CreateUser(email, password, firstName, lastName string) (entity.ID, error)
 	UpdateUser(e *entity.User) error
-	DeleteUser(id entity.ID) error
+	DeleteUser(id string) error
 }
 
 type userUseCase struct {
 	repo infrastructure.UserRepo
+	log  *logger.Logger
 }
 
 // New create new user use case
-func New(r infrastructure.UserRepo) UserUseCase {
+func New(s *server.Server, r infrastructure.UserRepo) UserUseCase {
 	return &userUseCase{
 		repo: r,
+		log:  s.Log,
 	}
 }
 
 // CreateUser create an user
 func (s *userUseCase) CreateUser(email, password, firstName, lastName string) (entity.ID, error) {
-	fmt.Println("CreateUser")
+	s.log.Zap.Info("got to create user")
 	e, err := entity.New(email, password, firstName, lastName)
 	if err != nil {
+		s.log.Zap.Error(err.Error())
+
 		return e.ID, err
 	}
 	return s.repo.Create(e)
 }
 
 // GetUser gets an user
-func (s *userUseCase) GetUser(id entity.ID) (*entity.User, error) {
-	return s.repo.Get(id)
+func (s *userUseCase) GetUser(id string) (*entity.User, error) {
+	uID, _ := entity.IDFromString(id)
+	return s.repo.Get(uID)
 }
 
 // SearchUsers searches users
@@ -58,7 +64,7 @@ func (s *userUseCase) ListUsers() ([]*entity.User, error) {
 }
 
 // DeleteUser deletes an user
-func (s *userUseCase) DeleteUser(id entity.ID) error {
+func (s *userUseCase) DeleteUser(id string) error {
 	u, err := s.GetUser(id)
 	if u == nil {
 		return entity.ErrUserNotFound
@@ -69,7 +75,8 @@ func (s *userUseCase) DeleteUser(id entity.ID) error {
 	if len(u.Books) > 0 {
 		return entity.ErrUserCannotBeDeleted
 	}
-	return s.repo.Delete(id)
+	uID, _ := entity.IDFromString(id)
+	return s.repo.Delete(uID)
 }
 
 // UpdateUser updates an user

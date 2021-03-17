@@ -1,8 +1,6 @@
 package config
 
 import (
-	"log"
-
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -15,19 +13,19 @@ type PostgresConf struct {
 	PostgresPassword string `required:"true" split_words:"true"`
 }
 
-// Spec struct for environment variables
-type Spec struct {
+// Specification struct for environment variables
+type Specification struct {
 	PostgresConf          `desc:"PostgreSQL config"`
 	PrometheusPushgateway string `required:"true" split_words:"true"`
 	APIPort               int    `default:"9000" split_words:"true"`
 }
 
 // Load is what loads the config.
-func Load() *Spec {
-	var c Spec
-	err := envconfig.Process("gcarch", &c)
+func Load() *Specification {
+	var cfg Specification
+	err := envconfig.Process("gcarch", &cfg)
 	if err != nil {
-		log.Fatal(err.Error())
+		panic(err)
 	}
-	return &c
+	return &cfg
 }

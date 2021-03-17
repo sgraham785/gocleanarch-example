@@ -5,13 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/rs/xid"
-	"github.com/sgraham785/gocleanarch-example/internal/user/usecase"
-
+	"github.com/go-chi/chi/v5"
 	"github.com/sgraham785/gocleanarch-example/internal/user/entity"
-
-	"github.com/codegangsta/negroni"
-	"github.com/gorilla/mux"
+	"github.com/sgraham785/gocleanarch-example/internal/user/usecase"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 )
 
 // UserHTTP JSON data
@@ -23,9 +20,9 @@ type UserHTTP struct {
 }
 
 // ListUsersHTTP handler
-func ListUsersHTTP(u usecase.UserUseCase) http.Handler {
+func ListUsersHTTP(u usecase.UserUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		errorMessage := "Error reading users"
+		errorMessage := "Error listing users"
 		var data []*entity.User
 		var err error
 		name := r.URL.Query().Get("name")
@@ -64,7 +61,7 @@ func ListUsersHTTP(u usecase.UserUseCase) http.Handler {
 }
 
 // CreateUserHTTP handler
-func CreateUserHTTP(u usecase.UserUseCase) http.Handler {
+func CreateUserHTTP(u usecase.UserUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error adding user"
 		var input struct {
@@ -104,77 +101,73 @@ func CreateUserHTTP(u usecase.UserUseCase) http.Handler {
 }
 
 // GetUserHTTP handler
-func GetUserHTTP(u usecase.UserUseCase) http.Handler {
+func GetUserHTTP(u usecase.UserUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error reading user"
-		vars := mux.Vars(r)
-		id, err := xid.FromString(vars["id"])
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
-		}
-		data, err := u.GetUser(id)
-		w.Header().Set("Content-Type", "application/json")
-		if err != nil && err != entity.ErrUserNotFound {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
-		}
+		if userID := chi.URLParam(r, "userID"); userID != "" {
+			data, err := u.GetUser(userID)
+			w.Header().Set("Content-Type", "application/json")
+			if err != nil && err != entity.ErrUserNotFound {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("error getting user"))
+				return
+			}
 
-		if data == nil {
+			if data == nil {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(errorMessage))
+				return
+			}
+			toJ := &UserHTTP{
+				ID:        data.ID,
+				Email:     data.Email,
+				FirstName: data.FirstName,
+				LastName:  data.LastName,
+			}
+			if err := json.NewEncoder(w).Encode(toJ); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(errorMessage))
+			}
+		} else {
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(errorMessage))
 			return
-		}
-		toJ := &UserHTTP{
-			ID:        data.ID,
-			Email:     data.Email,
-			FirstName: data.FirstName,
-			LastName:  data.LastName,
-		}
-		if err := json.NewEncoder(w).Encode(toJ); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
 		}
 	})
 }
 
 // DeleteUserHTTP handler
-func DeleteUserHTTP(u usecase.UserUseCase) http.Handler {
+func DeleteUserHTTP(u usecase.UserUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error removing user"
-		vars := mux.Vars(r)
-		id, err := xid.FromString(vars["id"])
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
-		}
-		err = u.DeleteUser(id)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
+		if userID := chi.URLParam(r, "userID"); userID != "" {
+			err := u.DeleteUser(userID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(errorMessage))
+				return
+			}
 		}
 	})
 }
 
-// UserRouter defined http routes for handlers
-func UserRouter(r *mux.Router, n negroni.Negroni, u usecase.UserUseCase) {
-	r.Handle("/v1/user", n.With(
-		negroni.Wrap(ListUsersHTTP(u)),
-	)).Methods("GET", "OPTIONS").Name("listUsers")
+// HTTPRoutes defined http routes for user
+func HTTPRoutes(s *server.Server, u usecase.UserUseCase) {
+	// RESTy routes for "books" resource
+	s.Router.Chi.Route("/user", func(r chi.Router) {
+		// r.With(paginate).Get("/", ListBooksHTTP(u))
+		r.Get("/", ListUsersHTTP(u))
+		r.Post("/", CreateUserHTTP(u))     // POST /book
+		r.Get("/search", ListUsersHTTP(u)) // GET /book/search?title=something
 
-	r.Handle("/v1/user", n.With(
-		negroni.Wrap(CreateUserHTTP(u)),
-	)).Methods("POST", "OPTIONS").Name("createUser")
+		r.Route("/{userID}", func(r chi.Router) {
+			// r.Use(BookCtx)             // Load the *Article on the request context
+			r.Get("/", GetUserHTTP(u)) // GET /book/123
+			// r.Put("/", UpdateArticle)    // PUT /book/123
+			r.Delete("/", DeleteUserHTTP(u)) // DELETE /book/123
+		})
 
-	r.Handle("/v1/user/{id}", n.With(
-		negroni.Wrap(GetUserHTTP(u)),
-	)).Methods("GET", "OPTIONS").Name("getUser")
-
-	r.Handle("/v1/user/{id}", n.With(
-		negroni.Wrap(DeleteUserHTTP(u)),
-	)).Methods("DELETE", "OPTIONS").Name("deleteUser")
+		// GET /book/whats-up
+		// r.With(BookCtx).Get("/{bookTitle:[a-z-]+}", GetBookHTTP(u))
+	})
 }

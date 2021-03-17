@@ -3,18 +3,18 @@ package metric
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
-	"github.com/sgraham785/gocleanarch-example/config"
+	"github.com/sgraham785/gocleanarch-example/pkg/config"
 )
 
 // service implements Service interface
 type service struct {
-	config               *config.Spec
+	config               *config.Specification
 	pHistogram           *prometheus.HistogramVec
 	httpRequestHistogram *prometheus.HistogramVec
 }
 
 //NewPrometheusService create a new prometheus service
-func NewPrometheusService(c *config.Spec) (*service, error) {
+func NewPrometheusService(c *config.Specification) (*service, error) {
 	cli := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "pushgateway",
 		Name:      "cmd_duration_seconds",

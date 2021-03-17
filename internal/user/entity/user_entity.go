@@ -16,6 +16,11 @@ func NewID() ID {
 	return xid.New()
 }
 
+func IDFromString(id string) (xid.ID, error) {
+	i, err := xid.FromString(id)
+	return i, err
+}
+
 // User entity
 type User struct {
 	ID        ID

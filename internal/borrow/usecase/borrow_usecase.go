@@ -6,6 +6,8 @@ import (
 	"github.com/sgraham785/gocleanarch-example/internal/borrow/entity"
 	userEntity "github.com/sgraham785/gocleanarch-example/internal/user/entity"
 	userUseCase "github.com/sgraham785/gocleanarch-example/internal/user/usecase"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 )
 
 //go:generate mockgen -destination=../mock/borrow_usecase_mock.go -package=mock github.com/sgraham785/gocleanarch-example/internal/borrow/usecase BorrowUseCase
@@ -19,23 +21,25 @@ type BorrowUseCase interface {
 type borrowUseCase struct {
 	userUseCase userUseCase.UserUseCase
 	bookUseCase bookUseCase.BookUseCase
+	log         *logger.Logger
 }
 
 // New create new borrow use case
-func New(u userUseCase.UserUseCase, b bookUseCase.BookUseCase) BorrowUseCase {
+func New(s *server.Server, u userUseCase.UserUseCase, b bookUseCase.BookUseCase) BorrowUseCase {
 	return &borrowUseCase{
 		userUseCase: u,
 		bookUseCase: b,
+		log:         s.Log,
 	}
 }
 
 // Borrow borrow a book to an user
 func (s *borrowUseCase) Borrow(u *userEntity.User, b *bookEntity.Book) error {
-	u, err := s.userUseCase.GetUser(u.ID)
+	u, err := s.userUseCase.GetUser(u.ID.String())
 	if err != nil {
 		return err
 	}
-	b, err = s.bookUseCase.GetBook(b.ID)
+	b, err = s.bookUseCase.GetBook(b.ID.String())
 	if err != nil {
 		return err
 	}
@@ -61,7 +65,7 @@ func (s *borrowUseCase) Borrow(u *userEntity.User, b *bookEntity.Book) error {
 
 //Return return a book
 func (s *borrowUseCase) Return(b *bookEntity.Book) error {
-	b, err := s.bookUseCase.GetBook(b.ID)
+	b, err := s.bookUseCase.GetBook(b.ID.String())
 	if err != nil {
 		return err
 	}
@@ -84,7 +88,7 @@ func (s *borrowUseCase) Return(b *bookEntity.Book) error {
 	if !borrowed {
 		return entity.ErrBookNotBorrowed
 	}
-	u, err := s.userUseCase.GetUser(borrowedBy)
+	u, err := s.userUseCase.GetUser(borrowedBy.String())
 	if err != nil {
 		return err
 	}

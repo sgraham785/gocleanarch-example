@@ -51,7 +51,7 @@ func (mr *MockBookUseCaseMockRecorder) CreateBook(arg0, arg1, arg2, arg3 interfa
 }
 
 // DeleteBook mocks base method.
-func (m *MockBookUseCase) DeleteBook(arg0 xid.ID) error {
+func (m *MockBookUseCase) DeleteBook(arg0 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteBook", arg0)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockBookUseCaseMockRecorder) DeleteBook(arg0 interface{}) *gomock.Call
 }
 
 // GetBook mocks base method.
-func (m *MockBookUseCase) GetBook(arg0 xid.ID) (*entity.Book, error) {
+func (m *MockBookUseCase) GetBook(arg0 string) (*entity.Book, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBook", arg0)
 	ret0, _ := ret[0].(*entity.Book)

@@ -5,11 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/codegangsta/negroni"
-	"github.com/gorilla/mux"
-	"github.com/rs/xid"
+	"github.com/go-chi/chi/v5"
 	"github.com/sgraham785/gocleanarch-example/internal/book/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/book/usecase"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 )
 
 // BookHTTP JSON data
@@ -22,7 +21,7 @@ type BookHTTP struct {
 }
 
 // ListBooksHTTP handler
-func ListBooksHTTP(u usecase.BookUseCase) http.Handler {
+func ListBooksHTTP(u usecase.BookUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error reading books"
 		var data []*entity.Book
@@ -64,7 +63,7 @@ func ListBooksHTTP(u usecase.BookUseCase) http.Handler {
 }
 
 // CreateBookHTTP handler
-func CreateBookHTTP(u usecase.BookUseCase) http.Handler {
+func CreateBookHTTP(u usecase.BookUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error adding book"
 		var input struct {
@@ -75,7 +74,6 @@ func CreateBookHTTP(u usecase.BookUseCase) http.Handler {
 		}
 		err := json.NewDecoder(r.Body).Decode(&input)
 		if err != nil {
-			log.Println(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errorMessage))
 			return
@@ -105,77 +103,74 @@ func CreateBookHTTP(u usecase.BookUseCase) http.Handler {
 }
 
 // GetBookHTTP handler
-func GetBookHTTP(u usecase.BookUseCase) http.Handler {
+func GetBookHTTP(u usecase.BookUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error reading book"
-		vars := mux.Vars(r)
-		id, err := xid.FromString(vars["id"])
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
-		}
-		data, err := u.GetBook(id)
-		if err != nil && err != entity.ErrBookNotFound {
+
+		if bookID := chi.URLParam(r, "bookID"); bookID != "" {
+			data, err := u.GetBook(bookID)
+			if err != nil && err != entity.ErrBookNotFound {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(errorMessage))
+				return
+			}
+			if data == nil {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(errorMessage))
+				return
+			}
+			toJ := &BookHTTP{
+				ID:       data.ID,
+				Title:    data.Title,
+				Author:   data.Author,
+				Pages:    data.Pages,
+				Quantity: data.Quantity,
+			}
+			if err := json.NewEncoder(w).Encode(toJ); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(errorMessage))
+			}
+
+		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(errorMessage))
 			return
 		}
 
-		if data == nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(errorMessage))
-			return
-		}
-		toJ := &BookHTTP{
-			ID:       data.ID,
-			Title:    data.Title,
-			Author:   data.Author,
-			Pages:    data.Pages,
-			Quantity: data.Quantity,
-		}
-		if err := json.NewEncoder(w).Encode(toJ); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-		}
 	})
 }
 
 // DeleteBookHTTP handler
-func DeleteBookHTTP(u usecase.BookUseCase) http.Handler {
+func DeleteBookHTTP(u usecase.BookUseCase) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		errorMessage := "Error removing bookmark"
-		vars := mux.Vars(r)
-		id, err := xid.FromString(vars["id"])
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
-		}
-		err = u.DeleteBook(id)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(errorMessage))
-			return
+		if bookID := chi.URLParam(r, "bookID"); bookID != "" {
+			err := u.DeleteBook(bookID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(errorMessage))
+				return
+			}
 		}
 	})
 }
 
-// BookRouter defined http routes for handlers
-func BookRouter(r *mux.Router, n negroni.Negroni, u usecase.BookUseCase) {
-	r.Handle("/v1/book", n.With(
-		negroni.Wrap(ListBooksHTTP(u)),
-	)).Methods("GET", "OPTIONS").Name("listBooks")
+// HTTPRoutes defines http routes for books
+func HTTPRoutes(s *server.Server, u usecase.BookUseCase) {
+	// RESTy routes for "books" resource
+	s.Router.Chi.Route("/book", func(r chi.Router) {
+		// r.With(paginate).Get("/", ListBooksHTTP(u))
+		r.Get("/", ListBooksHTTP(u))
+		r.Post("/", CreateBookHTTP(u))     // POST /book
+		r.Get("/search", ListBooksHTTP(u)) // GET /book/search?title=something
 
-	r.Handle("/v1/book", n.With(
-		negroni.Wrap(CreateBookHTTP(u)),
-	)).Methods("POST", "OPTIONS").Name("createBook")
+		r.Route("/{bookID}", func(r chi.Router) {
+			r.Get("/", GetBookHTTP(u)) // GET /book/123
+			// r.Put("/", UpdateArticle)    // PUT /book/123
+			r.Delete("/", DeleteBookHTTP(u)) // DELETE /book/123
+		})
 
-	r.Handle("/v1/book/{id}", n.With(
-		negroni.Wrap(GetBookHTTP(u)),
-	)).Methods("GET", "OPTIONS").Name("getBook")
-
-	r.Handle("/v1/book/{id}", n.With(
-		negroni.Wrap(DeleteBookHTTP(u)),
-	)).Methods("DELETE", "OPTIONS").Name("deleteBook")
+		// GET /book/whats-up
+		// r.With(BookCtx).Get("/{bookTitle:[a-z-]+}", GetBookHTTP(u))
+	})
 }

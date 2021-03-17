@@ -20,4 +20,5 @@
 # Dependency directories (comment to include it)
 vendor/
 
+tmp/
 !build/

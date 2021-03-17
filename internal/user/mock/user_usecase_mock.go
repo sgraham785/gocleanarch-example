@@ -51,7 +51,7 @@ func (mr *MockUserUseCaseMockRecorder) CreateUser(arg0, arg1, arg2, arg3 interfa
 }
 
 // DeleteUser mocks base method.
-func (m *MockUserUseCase) DeleteUser(arg0 xid.ID) error {
+func (m *MockUserUseCase) DeleteUser(arg0 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteUser", arg0)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockUserUseCaseMockRecorder) DeleteUser(arg0 interface{}) *gomock.Call
 }
 
 // GetUser mocks base method.
-func (m *MockUserUseCase) GetUser(arg0 xid.ID) (*entity.User, error) {
+func (m *MockUserUseCase) GetUser(arg0 string) (*entity.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUser", arg0)
 	ret0, _ := ret[0].(*entity.User)

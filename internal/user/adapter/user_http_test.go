@@ -8,41 +8,47 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codegangsta/negroni"
 	"github.com/golang/mock/gomock"
-	"github.com/gorilla/mux"
 	"github.com/sgraham785/gocleanarch-example/internal/user/adapter"
 	"github.com/sgraham785/gocleanarch-example/internal/user/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/user/mock"
+	"github.com/sgraham785/gocleanarch-example/pkg/router"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_ListUsersHTTP(t *testing.T) {
+func TestListUsersHTTP(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
+
 	m := mock.NewMockUserUseCase(controller)
-	r := mux.NewRouter()
-	n := negroni.New()
-	adapter.UserRouter(r, *n, m)
-	path, err := r.GetRoute("listUsers").GetPathTemplate()
-	assert.Nil(t, err)
-	assert.Equal(t, "/v1/user", path)
+	r := router.NewChiRouter()
+	s := &server.Server{
+		Router: r,
+	}
+
 	u := &entity.User{
 		ID: entity.NewID(),
 	}
 	m.EXPECT().
 		ListUsers().
 		Return([]*entity.User{u}, nil)
-	ts := httptest.NewServer(adapter.ListUsersHTTP(m))
+
+	adapter.HTTPRoutes(s, m)
+	h := adapter.ListUsersHTTP(m)
+
+	ts := httptest.NewServer(h)
 	defer ts.Close()
+
 	res, err := http.Get(ts.URL)
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 }
 
-func Test_ListUsersHTTP_NotFound(t *testing.T) {
+func TestListUsersHTTP_NotFound(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
+
 	m := mock.NewMockUserUseCase(controller)
 	ts := httptest.NewServer(adapter.ListUsersHTTP(m))
 	defer ts.Close()
@@ -54,7 +60,7 @@ func Test_ListUsersHTTP_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
-func Test_ListUsersHTTP_Search(t *testing.T) {
+func TestListUsersHTTP_Search(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	m := mock.NewMockUserUseCase(controller)
@@ -71,24 +77,24 @@ func Test_ListUsersHTTP_Search(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 }
 
-func Test_CreateUserHTTP(t *testing.T) {
+func TestCreateUserHTTP(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	m := mock.NewMockUserUseCase(controller)
-	r := mux.NewRouter()
-	n := negroni.New()
-	adapter.UserRouter(r, *n, m)
-	path, err := r.GetRoute("createUser").GetPathTemplate()
-	assert.Nil(t, err)
-	assert.Equal(t, "/v1/user", path)
+	r := router.NewChiRouter()
+	s := &server.Server{
+		Router: r,
+	}
 
 	m.EXPECT().
 		CreateUser(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(entity.NewID(), nil)
-	h := adapter.CreateUserHTTP(m)
 
+	adapter.HTTPRoutes(s, m)
+	h := adapter.CreateUserHTTP(m)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
+
 	payload := fmt.Sprintf(`{
 		"name": "ozzy",
 		"email": "ozzy@hell.com",
@@ -96,7 +102,7 @@ func Test_CreateUserHTTP(t *testing.T) {
 		"first_name":"Ozzy",
 		"last_name":"Osbourne"
 		}`)
-	resp, _ := http.Post(ts.URL+"/v1/user", "application/json", strings.NewReader(payload))
+	resp, _ := http.Post(ts.URL+"/user", "application/json", strings.NewReader(payload))
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var u *adapter.UserHTTP
@@ -104,27 +110,29 @@ func Test_CreateUserHTTP(t *testing.T) {
 	assert.Equal(t, "Ozzy Osbourne", fmt.Sprintf("%s %s", u.FirstName, u.LastName))
 }
 
-func Test_GetUserHTTP(t *testing.T) {
+func TestGetUserHTTP(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	m := mock.NewMockUserUseCase(controller)
-	r := mux.NewRouter()
-	n := negroni.New()
-	adapter.UserRouter(r, *n, m)
-	path, err := r.GetRoute("getUser").GetPathTemplate()
-	assert.Nil(t, err)
-	assert.Equal(t, "/v1/user/{id}", path)
+	r := router.NewChiRouter()
+	s := &server.Server{
+		Router: r,
+	}
+
 	u := &entity.User{
 		ID: entity.NewID(),
 	}
 	m.EXPECT().
-		GetUser(u.ID).
+		GetUser(u.ID.String()).
 		Return(u, nil)
-	handler := adapter.GetUserHTTP(m)
-	r.Handle("/v1/user/{id}", handler)
-	ts := httptest.NewServer(r)
+
+	adapter.HTTPRoutes(s, m)
+	h := adapter.GetUserHTTP(m)
+	r.Chi.Handle("/user/{userID}", h)
+	ts := httptest.NewServer(r.Chi)
 	defer ts.Close()
-	res, err := http.Get(ts.URL + "/v1/user/" + u.ID.String())
+
+	res, err := http.Get(ts.URL + "/user/" + u.ID.String())
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	var d *adapter.UserHTTP
@@ -133,24 +141,31 @@ func Test_GetUserHTTP(t *testing.T) {
 	assert.Equal(t, u.ID, d.ID)
 }
 
-func Test_DeleteUserHTTP(t *testing.T) {
+func TestDeleteUserHTTP(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	m := mock.NewMockUserUseCase(controller)
-	r := mux.NewRouter()
-	n := negroni.New()
-	adapter.UserRouter(r, *n, m)
-	path, err := r.GetRoute("deleteUser").GetPathTemplate()
-	assert.Nil(t, err)
-	assert.Equal(t, "/v1/user/{id}", path)
+	r := router.NewChiRouter()
+	s := &server.Server{
+		Router: r,
+	}
+
 	u := &entity.User{
 		ID: entity.NewID(),
 	}
-	m.EXPECT().DeleteUser(u.ID).Return(nil)
-	handler := adapter.DeleteUserHTTP(m)
-	req, _ := http.NewRequest("DELETE", "/v1/user/"+u.ID.String(), nil)
-	r.Handle("/v1/user/{id}", handler).Methods("DELETE", "OPTIONS")
+
+	m.EXPECT().
+		DeleteUser(u.ID.String()).
+		Return(nil)
+
+	adapter.HTTPRoutes(s, m)
+	h := adapter.DeleteUserHTTP(m)
+	r.Chi.Handle("/user/{userID}", h)
+	ts := httptest.NewServer(r.Chi)
+	defer ts.Close()
+
+	req, _ := http.NewRequest("DELETE", "/user/"+u.ID.String(), nil)
 	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
+	r.Chi.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }

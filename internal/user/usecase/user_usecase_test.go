@@ -7,6 +7,8 @@ import (
 	"github.com/sgraham785/gocleanarch-example/internal/user/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/user/infrastructure"
 	"github.com/sgraham785/gocleanarch-example/internal/user/usecase"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,8 +24,13 @@ func newFixtureUser() *entity.User {
 }
 
 func Test_userUseCase_CreateUser(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	uc := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	uc := usecase.New(s, r)
 	u := newFixtureUser()
 	_, err := uc.CreateUser(u.Email, u.Password, u.FirstName, u.LastName)
 	assert.Nil(t, err)
@@ -32,8 +39,13 @@ func Test_userUseCase_CreateUser(t *testing.T) {
 }
 
 func Test_userUseCase_SearchUsers(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	uc := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	uc := usecase.New(s, r)
 	u1 := newFixtureUser()
 	u2 := newFixtureUser()
 	u2.FirstName = "Lemmy"
@@ -58,23 +70,28 @@ func Test_userUseCase_SearchUsers(t *testing.T) {
 	})
 
 	t.Run("get", func(t *testing.T) {
-		saved, err := uc.GetUser(uID)
+		saved, err := uc.GetUser(uID.String())
 		assert.Nil(t, err)
 		assert.Equal(t, u1.FirstName, saved.FirstName)
 	})
 }
 
 func Test_userUseCase_UpdateUser(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	uc := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	uc := usecase.New(s, r)
 	u := newFixtureUser()
 	id, err := uc.CreateUser(u.Email, u.Password, u.FirstName, u.LastName)
 	assert.Nil(t, err)
-	saved, _ := uc.GetUser(id)
+	saved, _ := uc.GetUser(id.String())
 	saved.FirstName = "Dio"
 	saved.Books = append(saved.Books, entity.NewID())
 	assert.Nil(t, uc.UpdateUser(saved))
-	updated, err := uc.GetUser(id)
+	updated, err := uc.GetUser(id.String())
 	assert.Nil(t, err)
 	assert.Equal(t, "Dio", updated.FirstName)
 	assert.False(t, updated.UpdatedAt.IsZero())
@@ -82,25 +99,30 @@ func Test_userUseCase_UpdateUser(t *testing.T) {
 }
 
 func Test_userUseCase_DeleteUser(t *testing.T) {
-	repo := infrastructure.NewInMemRepo()
-	uc := usecase.New(repo)
+	r := infrastructure.NewInMemRepo()
+	logger := logger.New()
+	defer logger.Zap.Sync()
+	s := &server.Server{
+		Log: logger,
+	}
+	uc := usecase.New(s, r)
 	u1 := newFixtureUser()
 	u2 := newFixtureUser()
 	u2ID, _ := uc.CreateUser(u2.Email, u2.Password, u2.FirstName, u2.LastName)
 
-	err := uc.DeleteUser(u1.ID)
+	err := uc.DeleteUser(u1.ID.String())
 	assert.Equal(t, entity.ErrUserNotFound, err)
 
-	err = uc.DeleteUser(u2ID)
+	err = uc.DeleteUser(u2ID.String())
 	assert.Nil(t, err)
-	_, err = uc.GetUser(u2ID)
+	_, err = uc.GetUser(u2ID.String())
 	assert.Equal(t, entity.ErrUserNotFound, err)
 
 	u3 := newFixtureUser()
 	id, _ := uc.CreateUser(u3.Email, u3.Password, u3.FirstName, u3.LastName)
-	saved, _ := uc.GetUser(id)
+	saved, _ := uc.GetUser(id.String())
 	saved.Books = []entity.ID{entity.NewID()}
 	_ = uc.UpdateUser(saved)
-	err = uc.DeleteUser(id)
+	err = uc.DeleteUser(id.String())
 	assert.Equal(t, entity.ErrUserCannotBeDeleted, err)
 }

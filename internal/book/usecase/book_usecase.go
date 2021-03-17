@@ -6,28 +6,32 @@ import (
 
 	"github.com/sgraham785/gocleanarch-example/internal/book/entity"
 	"github.com/sgraham785/gocleanarch-example/internal/book/infrastructure"
+	"github.com/sgraham785/gocleanarch-example/pkg/logger"
+	"github.com/sgraham785/gocleanarch-example/pkg/server"
 )
 
 //go:generate mockgen -destination=../mock/book_usecase_mock.go -package=mock github.com/sgraham785/gocleanarch-example/internal/book/usecase BookUseCase
 
 // BookUseCase is the interface that provides the methods.
 type BookUseCase interface {
-	GetBook(id entity.ID) (*entity.Book, error)
+	GetBook(id string) (*entity.Book, error)
 	SearchBooks(query string) ([]*entity.Book, error)
 	ListBooks() ([]*entity.Book, error)
 	CreateBook(title string, author string, pages int, quantity int) (entity.ID, error)
 	UpdateBook(e *entity.Book) error
-	DeleteBook(id entity.ID) error
+	DeleteBook(id string) error
 }
 
 type bookUseCase struct {
 	repo infrastructure.BookRepo
+	log  *logger.Logger
 }
 
 // New create new book usecase
-func New(r infrastructure.BookRepo) BookUseCase {
+func New(s *server.Server, r infrastructure.BookRepo) BookUseCase {
 	return &bookUseCase{
 		repo: r,
+		log:  s.Log,
 	}
 }
 
@@ -41,8 +45,9 @@ func (u *bookUseCase) CreateBook(title string, author string, pages int, quantit
 }
 
 // GetBook get a book
-func (u *bookUseCase) GetBook(id entity.ID) (*entity.Book, error) {
-	b, err := u.repo.Get(id)
+func (u *bookUseCase) GetBook(id string) (*entity.Book, error) {
+	bID, err := entity.IDFromString(id)
+	b, err := u.repo.Get(bID)
 	if b == nil {
 		return nil, entity.ErrBookNotFound
 	}
@@ -78,12 +83,14 @@ func (u *bookUseCase) ListBooks() ([]*entity.Book, error) {
 }
 
 // DeleteBook Delete a book
-func (u *bookUseCase) DeleteBook(id entity.ID) error {
+func (u *bookUseCase) DeleteBook(id string) error {
 	_, err := u.GetBook(id)
 	if err != nil {
 		return err
 	}
-	return u.repo.Delete(id)
+
+	bID, _ := entity.IDFromString(id)
+	return u.repo.Delete(bID)
 }
 
 // UpdateBook Update a book
